@@ -14,7 +14,6 @@ from django.contrib.auth import authenticate, login
 import random
 from .utils import send_password_reset_email
 from rest_framework import permissions
-from . models import Profile
 
 # Create your views here.
 
@@ -272,16 +271,3 @@ class ChangePasswordView(APIView):
 
         return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
     
-
-
-class ProfileView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        profile = Profile.objects.get(user=request.user)
-        data = {
-            'name': profile.name,
-            'phone': profile.phone,
-            'image': profile.image.url if profile.image else None,
-        }
-        return Response(data, status=status.HTTP_200_OK)
