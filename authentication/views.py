@@ -14,6 +14,9 @@ from django.contrib.auth import authenticate, login
 import random
 from .utils import send_password_reset_email
 from rest_framework import permissions
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from social.models import UserProfile
+from django.db import transaction
 
 # Create your views here.
 
@@ -109,13 +112,19 @@ class RegisterView(APIView):
             return Response({'message': 'OTP resent. Please verify your email.'}, status=status.HTTP_200_OK)
 
         # Case 3: New user — create and send OTP
-        user = User.objects.create_user(username=email, email=email, password=password, first_name=name)
-        user.is_active = False
-        user.save()
+        with transaction.atomic():
+            user = User.objects.create_user(username=email, email=email, password=password, first_name=name)
+            user.is_active = False
+            user.save()
 
-        code = str(random.randint(1000, 9999))
-        EmailVerification.objects.create(user=user, code=code)
-        send_verification_email(email, code)
+            # ✅ Update UserProfile name after signal creates it
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.name = name
+            profile.save()
+
+            code = str(random.randint(1000, 9999))
+            EmailVerification.objects.create(user=user, code=code)
+            send_verification_email(email, code)
 
         return Response({'message': 'User created. Please verify your email.'}, status=status.HTTP_201_CREATED)
 
@@ -271,3 +280,28 @@ class ChangePasswordView(APIView):
 
         return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
     
+
+class LogoutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        
+        refresh_token = request.data.get("refresh")
+
+        if not refresh_token:
+            return Response({"detail": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+
+            token = RefreshToken(refresh_token)
+
+            token.blacklist()
+
+            return Response({"detail": "Logout successful."}, status=status.HTTP_205_RESET_CONTENT)
+
+        except InvalidToken:
+            return Response({"detail": "The token is invalid or expired."}, status=status.HTTP_400_BAD_REQUEST)
+        except TokenError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

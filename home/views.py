@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import permissions
-from home.serializers import AlbumImageSerializer, AlbumSerializer, OptionSerializer, CategorySerializer
+from home.serializers import AddAlbumImagesSerializer, AlbumImageSerializer, AlbumSerializer, OptionSerializer, CategorySerializer
 from . models import Album, AlbumImage, Option, Category
 
 # Create your views here.
@@ -114,3 +114,13 @@ class AlbumImageAudioView(APIView):
 
         serializer = AlbumImageSerializer(image)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class AddImagesToAlbumView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = AddAlbumImagesSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Images added successfully!"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

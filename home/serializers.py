@@ -30,3 +30,25 @@ class AlbumSerializer(serializers.ModelSerializer):
     class Meta:
         model = Album
         fields = ['id', 'title', 'created_at', 'images']
+
+
+class AddAlbumImagesSerializer(serializers.Serializer):
+    album_id = serializers.IntegerField()
+    images = serializers.ListField(
+        child=serializers.ImageField(),
+        allow_empty=False
+    )
+
+    def create(self, validated_data):
+        album_id = validated_data['album_id']
+        images = validated_data['images']
+
+        try:
+            album = Album.objects.get(id=album_id)
+        except Album.DoesNotExist:
+            raise serializers.ValidationError("Album not found.")
+
+        album_images = []
+        for image in images:
+            album_images.append(AlbumImage.objects.create(album=album, image=image))
+        return album_images

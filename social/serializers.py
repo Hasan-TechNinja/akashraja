@@ -45,6 +45,15 @@ class LastPlayedSerializer(serializers.ModelSerializer):
         fields = ("id", "with_user", "at")
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     class Meta:
         model = UserProfile
-        fields = ['player_id', 'name', 'image', 'avatar', 'online']
+        fields = ['user_id', 'player_id', 'name', 'image', 'avatar', 'online']
+
+
+class UserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'profile']

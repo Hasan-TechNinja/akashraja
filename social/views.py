@@ -6,11 +6,13 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 
 from .models import UserProfile, Friendship, FriendRequest, LastPlayed
-from .serializers import (
-    UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer
-)
+from .serializers import UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer, UserSerializer
 from .permissions import IsAuthenticated
 from .utils import are_friends
+from rest_framework import permissions
+from django.db.models import Q
+from django.utils import timezone
+
 
 User = get_user_model()
 
@@ -29,7 +31,7 @@ class FriendsListView(generics.ListAPIView):
         u = self.request.user
         return Friendship.objects.filter(Q(user_a=u) | Q(user_b=u)).order_by("-created_at")
 
-
+'''
 class AddFriendByPlayerIDView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -55,6 +57,56 @@ class AddFriendByPlayerIDView(APIView):
             return Response({"detail": "Request already sent."}, status=200)
 
         return Response(FriendRequestSerializer(fr).data, status=201)
+'''
+
+class AddFriendByPlayerIDView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        player_id = request.data.get("player_id")
+
+        if not player_id:
+            return Response({"detail": "player_id is required."}, status=400)
+
+        # ✅ 1. Find target user by player_id
+        try:
+            target_profile = UserProfile.objects.get(player_id=player_id)
+            target_user = target_profile.user
+        except UserProfile.DoesNotExist:
+            return Response({"detail": "User not found with this player_id."}, status=404)
+
+        current_user = request.user
+
+        # ✅ 2. Prevent self-request
+        if target_user == current_user:
+            return Response({"detail": "You cannot send a friend request to yourself."}, status=400)
+
+        # ✅ 3. Check if already friends
+        already_friends = Friendship.objects.filter(
+            Q(user_a=current_user, user_b=target_user) |
+            Q(user_a=target_user, user_b=current_user)
+        ).exists()
+        if already_friends:
+            return Response({"detail": "You are already friends with this user."}, status=400)
+
+        # ✅ 4. Check if friend request already sent (either direction)
+        existing_request = FriendRequest.objects.filter(
+            Q(from_user=current_user, to_user=target_user) |
+            Q(from_user=target_user, to_user=current_user)
+        ).first()
+
+        if existing_request:
+            if existing_request.accepted:
+                return Response({"detail": "You are already friends."}, status=400)
+            elif existing_request.from_user == current_user:
+                return Response({"detail": "You already sent a request to this user."}, status=400)
+            else:
+                return Response({"detail": "This user already sent you a request."}, status=400)
+
+        # ✅ 5. Create new friend request
+        FriendRequest.objects.create(from_user=current_user, to_user=target_user)
+        return Response({"detail": "Friend request sent successfully."}, status=201)
+    
 
 
 class RespondFriendRequestView(APIView):
@@ -110,15 +162,35 @@ class LastPlayedListView(generics.ListAPIView):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def record_last_played(request):
-    """Call this from game server to record that two users played together."""
+    """Record that two users played together (update or create latest record)."""
     other_id = request.data.get("with_user_id")
     if not other_id:
         return Response({"detail": "with_user_id required"}, status=400)
-    if int(other_id) == request.user.id:
+
+    try:
+        other_id = int(other_id)
+    except ValueError:
+        return Response({"detail": "Invalid user id"}, status=400)
+
+    if other_id == request.user.id:
         return Response({"detail": "invalid"}, status=400)
-    LastPlayed.objects.create(user_id=request.user.id, with_user_id=other_id)
-    LastPlayed.objects.create(user_id=other_id, with_user_id=request.user.id)
+
+    user_id = request.user.id
+
+    # Use update_or_create to keep only one entry per pair
+    LastPlayed.objects.update_or_create(
+        user_id=user_id,
+        with_user_id=other_id,
+        defaults={"at": timezone.now()},
+    )
+    LastPlayed.objects.update_or_create(
+        user_id=other_id,
+        with_user_id=user_id,
+        defaults={"at": timezone.now()},
+    )
+
     return Response({"ok": True})
+
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -128,3 +200,56 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         profile, created = UserProfile.objects.get_or_create(user=self.request.user)
         return profile
+    
+
+
+
+# 1️⃣ Sent Friend Requests (I sent)
+class SentFriendRequestsView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = FriendRequestSerializer
+
+    def get_queryset(self):
+        return FriendRequest.objects.filter(from_user=self.request.user, accepted=False)
+
+
+# 2️⃣ Received Friend Requests (To me)
+class ReceivedFriendRequestsView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = FriendRequestSerializer
+
+    def get_queryset(self):
+        return FriendRequest.objects.filter(to_user=self.request.user, accepted=False)
+
+
+# 3️⃣ My Friends List
+class MyFriendsListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # find all friendships where user is user_a or user_b
+        friendships = Friendship.objects.filter(Q(user_a=user) | Q(user_b=user))
+        # collect all other users
+        friend_ids = [
+            f.user_b_id if f.user_a_id == user.id else f.user_a_id
+            for f in friendships
+        ]
+        return User.objects.filter(id__in=friend_ids)
+
+
+class PlayedUsersListView(generics.ListAPIView):
+    """
+    Return the list of users that the authenticated user has played with.
+    Each user appears only once with the last played time.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = LastPlayedSerializer
+
+    def get_queryset(self):
+        return (
+            LastPlayed.objects.filter(user=self.request.user)
+            .select_related("with_user__profile")
+            .order_by("-at")
+        )

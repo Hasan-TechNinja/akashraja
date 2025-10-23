@@ -55,3 +55,4 @@ class LastPlayed(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["user", "-at"])]
+        unique_together = ("user", "with_user")  # ensures 1 entry per pair

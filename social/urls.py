@@ -3,7 +3,7 @@ from .views import (
     MeView, FriendsListView, AddFriendByPlayerIDView, RespondFriendRequestView,
     RemoveFriendView, SearchUsersView, LastPlayedListView, record_last_played
 )
-from .views import UserProfileView
+from . import views
 
 urlpatterns = [
     path("me/", MeView.as_view()),
@@ -14,5 +14,10 @@ urlpatterns = [
     path("search/", SearchUsersView.as_view()),
     path("last-played/", LastPlayedListView.as_view()),
     path("last-played/record/", record_last_played),
-    path("profile/", UserProfileView.as_view()),
+    path("profile/", views.UserProfileView.as_view()),
+    path("friends/requests/sent/", views.SentFriendRequestsView.as_view()),
+    path("friends/requests/received/", views.ReceivedFriendRequestsView.as_view()),
+    path("friends/my/", views.MyFriendsListView.as_view()),
+    path("last-played/users/", views.PlayedUsersListView.as_view(), name="played-users-list"),
+
 ]
