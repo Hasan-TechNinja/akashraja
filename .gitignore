@@ -1,0 +1,25 @@
+venv/
+.env
+__pycache__/
+env/
+.idea/
+*.pyc
+*.sqlite3
+*.log
+*.pot
+
+# Django stuff:
+staticfiles/
+media/
+.DS_Store
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# If you are using VSCode
+.vscode/
+# If you are using PyCharm
+.idea/
+# If you are using JetBrains IDEs
+/secrets/
