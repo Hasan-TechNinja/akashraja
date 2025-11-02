@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'authentication',
     'home',
     'social',
+    'payment',
 ]
 
 MIDDLEWARE = [
@@ -142,6 +143,7 @@ EMAIL_HOST_USER = config("EMAIL_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_PASS")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
 
 REST_FRAMEWORK = {
 
