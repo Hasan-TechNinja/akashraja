@@ -1,6 +1,3 @@
-# -----------------------------
-# 3️⃣  Challenge: accept / decline
-# -----------------------------
 from .sockets import sio
 from .utils import fire_and_forget
 from .constants import LABEL_SIZES, IMAGE_IDS
@@ -15,7 +12,6 @@ from django.db import models, transaction
 from django_redis import get_redis_connection
 from .models import GameChallenge, GameSession
 from .serializers import ChallengeCreateSerializer, ChallengeSerializer, SessionSerializer
-
 
 
 class ChallengeRespondView(views.APIView):
@@ -117,13 +113,7 @@ class ChallengeRespondView(views.APIView):
         return Response(session_data, status=201)
 
 
-# -----------------------------
-# 1️⃣  Challenge: create
-# -----------------------------
-from rest_framework import generics, permissions
-from .models import GameChallenge
-from .serializers import ChallengeCreateSerializer
-from .constants import LABEL_SIZES
+
 
 class ChallengeCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -141,13 +131,6 @@ class ChallengeCreateView(generics.CreateAPIView):
 
 
 
-# -----------------------------
-# 2️⃣  Challenge: list pending
-# -----------------------------
-from rest_framework import generics, permissions
-from django.db import models
-from .models import GameChallenge
-from .serializers import ChallengeSerializer
 
 class PendingChallengesView(generics.ListAPIView):
     """
@@ -163,14 +146,6 @@ class PendingChallengesView(generics.ListAPIView):
         )
 
 
-# -----------------------------
-# 4️⃣  My active session
-# -----------------------------
-from rest_framework import views, permissions, status
-from rest_framework.response import Response
-from django.db import models
-from .models import GameSession
-from .serializers import SessionSerializer
 
 class MyActiveSessionView(views.APIView):
     """
@@ -195,13 +170,6 @@ class MyActiveSessionView(views.APIView):
         })
 
 
-# -----------------------------
-# 5️⃣  Game state view
-# -----------------------------
-from rest_framework import views, permissions, status
-from rest_framework.response import Response
-from django_redis import get_redis_connection
-from .models import GameSession
 
 r = get_redis_connection("default")
 
@@ -260,18 +228,6 @@ class SessionStateView(views.APIView):
         return Response(data)
 
 
-# -----------------------------
-# 6️⃣  Flip (play turn)
-# -----------------------------
-from rest_framework import views, permissions, status
-from rest_framework.response import Response
-from django.utils import timezone
-from django.db import transaction
-from django_redis import get_redis_connection
-
-from .models import GameSession
-from .sockets import sio
-from .utils import fire_and_forget
 
 r = get_redis_connection("default")
 
