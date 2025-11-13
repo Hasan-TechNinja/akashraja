@@ -1,5 +1,6 @@
-from .sockets import sio
 from .utils import fire_and_forget
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from .constants import LABEL_SIZES, IMAGE_IDS
 from .utils import fire_and_forget
 from rest_framework import generics, permissions, status, views
@@ -12,6 +13,17 @@ from django.db import models, transaction
 from django_redis import get_redis_connection
 from .models import GameChallenge, GameSession
 from .serializers import ChallengeCreateSerializer, ChallengeSerializer, SessionSerializer
+
+
+def _session_keys(sid):
+    base = f"game:{sid}:"
+    return {
+        "board":   base + "board",
+        "revealed": base + "revealed",
+        "turn":     base + "turn",
+        "scores":   base + "scores",
+        "meta":     base + "meta",
+    }
 
 
 class ChallengeRespondView(views.APIView):
@@ -80,19 +92,14 @@ class ChallengeRespondView(views.APIView):
         # ======================================================
 
         # Notify both players that challenge is accepted
-        fire_and_forget(
-            sio.emit(
-                "challenge_accepted",
-                {"session": session_data},
-                to=f"user:{ch.challenger_id}",
-            )
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{ch.challenger_id}",
+            {"type": "challenge.accepted", "session": session_data},
         )
-        fire_and_forget(
-            sio.emit(
-                "challenge_accepted",
-                {"session": session_data},
-                to=f"user:{ch.opponent_id}",
-            )
+        async_to_sync(channel_layer.group_send)(
+            f"user_{ch.opponent_id}",
+            {"type": "challenge.accepted", "session": session_data},
         )
 
         # Broadcast initial game state to the game room
@@ -105,7 +112,7 @@ class ChallengeRespondView(views.APIView):
             "scores": {"p1": 0, "p2": 0},
             "reveal_all_until": reveal_ms,
         }
-        fire_and_forget(sio.emit("game_state", state, to=f"game:{session.id}"))
+        async_to_sync(channel_layer.group_send)(f"game_{session.id}", {"type": "game.state", "state": state})
 
         # ======================================================
         # ✅ Return session info to REST API client
@@ -321,7 +328,8 @@ class FlipView(views.APIView):
         }
 
         # --- 🔔 Broadcast live updates to both players ---
-        fire_and_forget(sio.emit("game_move", payload, to=f"game:{pk}"))
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(f"game_{pk}", {"type": "game.move", "payload": payload})
 
         state = {
             "session_id": pk,
@@ -335,6 +343,6 @@ class FlipView(views.APIView):
             "scores": {k.decode(): int(v) for k, v in r.hgetall(keys["scores"]).items()},
             "reveal_all_until": int(r.hget(keys["meta"], "reveal_all_until") or 0),
         }
-        fire_and_forget(sio.emit("game_state", state, to=f"game:{pk}"))
+        async_to_sync(channel_layer.group_send)(f"game_{pk}", {"type": "game.state", "state": state})
 
         return Response(payload)
