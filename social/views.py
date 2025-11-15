@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from rest_framework import status, generics, mixins
+from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
@@ -9,7 +9,6 @@ from .models import UserProfile, Friendship, FriendRequest, LastPlayed
 from .serializers import UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer, UserSerializer, DeviceIDSerializer
 from .permissions import IsAuthenticated
 from .utils import are_friends
-from rest_framework import permissions
 from django.db.models import Q
 from django.utils import timezone
 
@@ -31,33 +30,7 @@ class FriendsListView(generics.ListAPIView):
         u = self.request.user
         return Friendship.objects.filter(Q(user_a=u) | Q(user_b=u)).order_by("-created_at")
 
-'''
-class AddFriendByPlayerIDView(APIView):
-    permission_classes = [IsAuthenticated]
-    def post(self, request):
-        player_id = request.data.get("player_id", "").strip()
-        if not player_id:
-            return Response({"detail": "player_id required"}, status=400)
 
-        try:
-            to_profile = UserProfile.objects.select_related("user").get(player_id=player_id)
-        except UserProfile.DoesNotExist:
-            return Response({"detail": "Player not found"}, status=404)
-
-        if to_profile.user_id == request.user.id:
-            return Response({"detail": "Cannot add yourself."}, status=400)
-
-        if are_friends(request.user, to_profile.user):
-            return Response({"detail": "Already friends."}, status=200)
-
-        fr, created = FriendRequest.objects.get_or_create(
-            from_user=request.user, to_user=to_profile.user
-        )
-        if not created:
-            return Response({"detail": "Request already sent."}, status=200)
-
-        return Response(FriendRequestSerializer(fr).data, status=201)
-'''
 
 class AddFriendByPlayerIDView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -71,6 +44,11 @@ class AddFriendByPlayerIDView(APIView):
         # ✅ 1. Find target user by player_id
         try:
             target_profile = UserProfile.objects.get(player_id=player_id)
+            try:
+                target_user_device_id = target_profile.device_id
+            except UserProfile.DoesNotExist:
+                target_user_device_id = None
+
             target_user = target_profile.user
         except UserProfile.DoesNotExist:
             return Response({"detail": "User not found with this player_id."}, status=404)
@@ -105,7 +83,7 @@ class AddFriendByPlayerIDView(APIView):
 
         # ✅ 5. Create new friend request
         FriendRequest.objects.create(from_user=current_user, to_user=target_user)
-        return Response({"detail": "Friend request sent successfully."}, status=201)
+        return Response({"detail": f"{target_user_device_id}"}, status=201)
     
 
 

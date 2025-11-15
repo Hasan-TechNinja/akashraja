@@ -8,10 +8,11 @@ class UserMiniSerializer(serializers.ModelSerializer):
     avatar = serializers.CharField(source="profile.avatar", read_only=True)
     online = serializers.BooleanField(source="profile.online", read_only=True)
     player_id = serializers.CharField(source="profile.player_id", read_only=True)
+    device_id = serializers.CharField(source="profile.device_id", read_only=True)
 
     class Meta:
         model = User
-        fields = ("id", "username", "player_id", "avatar", "online")
+        fields = ("id", "username", "player_id", "device_id", "avatar", "online")
 
 
 class FriendSerializer(serializers.ModelSerializer):
