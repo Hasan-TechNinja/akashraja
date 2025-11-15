@@ -57,3 +57,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'profile']
+
+
+class DeviceIDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ['device_id']

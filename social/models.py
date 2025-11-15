@@ -15,6 +15,7 @@ class UserProfile(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True)
     image = models.ImageField(upload_to="profiles/", blank=True, null=True)
     avatar = models.URLField(blank=True, null=True)  # or ImageField if you manage uploads
+    device_id = models.CharField(max_length=200, blank=True, null=True)
     online = models.BooleanField(default=False)
 
     def __str__(self):

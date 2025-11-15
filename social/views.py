@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 
 from .models import UserProfile, Friendship, FriendRequest, LastPlayed
-from .serializers import UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer, UserSerializer
+from .serializers import UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer, UserSerializer, DeviceIDSerializer
 from .permissions import IsAuthenticated
 from .utils import are_friends
 from rest_framework import permissions
@@ -253,3 +253,24 @@ class PlayedUsersListView(generics.ListAPIView):
             .select_related("with_user__profile")
             .order_by("-at")
         )
+
+class UpdateDeviceIDView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        serializer = DeviceIDSerializer(profile)
+        return Response(serializer.data)
+
+    
+    def put(self, request):
+        device_id = request.data.get("device_id", "").strip()
+        if not device_id:
+            return Response({"detail": "device_id is required."}, status=400)
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        # allow partial update (only device_id)
+        serializer = DeviceIDSerializer(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

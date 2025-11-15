@@ -19,5 +19,6 @@ urlpatterns = [
     path("friends/requests/received/", views.ReceivedFriendRequestsView.as_view()),
     path("friends/my/", views.MyFriendsListView.as_view()),
     path("last-played/users/", views.PlayedUsersListView.as_view(), name="played-users-list"),
+    path("profile/device-id/", views.UpdateDeviceIDView.as_view(), name="update-device-id"),
 
 ]
