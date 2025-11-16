@@ -4,6 +4,8 @@ from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+
+from game.services import handle_create_challenge, handle_flip, handle_respond_challenge
 from .models import GameSession
 from .utils import fire_and_forget  # optional
 from django_redis import get_redis_connection
@@ -25,45 +27,54 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         # Join a personal group so server can send direct notifications
         await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
 
+        # Check if session_id is provided in the query string
+        session_id = self.scope["url_route"]["kwargs"].get("session_id")
+        if session_id:
+            self.room_name = f"game_{session_id}"
+            await self.channel_layer.group_add(self.room_name, self.channel_name)
+        else:
+            self.room_name = None
+
     async def receive_json(self, content):
-        # Expect messages like: {"action":"join","session_id": 5} or {"action":"flip","session_id":5,"indices":[1,2]}
         action = content.get("action")
-        if action == "join":
-            session_id = int(content["session_id"])
-            room = f"game_{session_id}"
-            # permission check
-            allowed = await database_sync_to_async(self._user_can_join)(self.user.id, session_id)
-            if not allowed:
-                await self.send_json({"error":"forbidden"})
+        if action == "flip":
+            session_id = content.get("session_id")
+            indices = content.get("indices", [])
+            if len(indices) != 2:
+                await self.send_json({"error": "Provide exactly two indices."})
                 return
-            self.room_name = room
-            await self.channel_layer.group_add(room, self.channel_name)
-            # send current state back
-            state = await database_sync_to_async(_read_public_state)(session_id)  # wrap read function
-            await self.send_json({"type":"game_state","state":state})
-        elif action == "flip":
-            # forward to server logic or call existing REST flip endpoint
-            # simpler: call channel layer to notify other players
-            await self.channel_layer.group_send(self.room_name, {"type":"game.move", "payload": content})
-        # ... handle other actions
+
+            try:
+                payload, state = await database_sync_to_async(handle_flip)(session_id, self.user.id, indices[0], indices[1])
+            except ValueError as e:
+                await self.send_json({"error": str(e)})
+                return
+
+            # Broadcast the updated state to all users in the session group
+            await self.channel_layer.group_send(
+                f"game_{session_id}",
+                {"type": "game_state", "state": state}
+            )
+
+            # Send the updated state back to the user who performed the flip
+            await self.send_json({"type": "game_state", "state": state})
+    # ... handle other actions
 
     async def game_move(self, event):
         # broadcasted event handler
         await self.send_json({"type":"game_move", "payload": event["payload"]})
 
     async def disconnect(self, code):
-        if hasattr(self, "room_name"):
+        if hasattr(self, "room_name") and self.room_name:
             await self.channel_layer.group_discard(self.room_name, self.channel_name)
         # Remove from personal group
         if hasattr(self, "user") and getattr(self, "user", None):
             await self.channel_layer.group_discard(f"user_{self.user.id}", self.channel_name)
 
     async def game_state(self, event):
-        # server sends full state
-        await self.send_json({"type": "game_state", "state": event.get("state")})
-
-    async def challenge_accepted(self, event):
-        await self.send_json({"type": "challenge_accepted", "session": event.get("session")})
+        # Broadcasted event handler for game state updates
+        state = event.get("state")
+        await self.send_json({"type": "game_state", "state": state})
 
     # sync DB helper
     def _user_can_join(self, user_id, session_id):
