@@ -67,7 +67,7 @@ def handle_respond_challenge(challenge_id, accept, user_id):
             "session_id": session.id,
             "label": challenge.label,
             "size": size,
-            "tiles": [None] * size,
+            "tiles": [],
             "turn_user_id": challenge.challenger_id,
             "scores": {"p1": 0, "p2": 0},
             "reveal_all_until": reveal_ms,
@@ -116,7 +116,17 @@ def handle_flip(session_id, user_id, i, j):
     label = int(meta[b"label"])
     reveal_all_until = int(meta.get(b"reveal_all_until", b"0") or 0)
     scores = {k.decode(): int(v) for k, v in r.hgetall(keys["scores"]).items()}
-    tiles = [board[x] if x in revealed else None for x in range(size)]
+    # tiles = [board[x] if x in revealed else None for x in range(size)]
+    # INDEX-BASED TILE REPRESENTATION FOR FINAL STATE
+    if len(revealed) == 0:
+        tiles = []
+    else:
+        tiles = [
+            (i if i in revealed else None)
+            for i in range(size)
+        ]
+
+
 
     if finished:
         # Persist final scores + winner

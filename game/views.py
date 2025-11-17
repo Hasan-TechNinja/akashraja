@@ -219,7 +219,17 @@ class SessionStateView(views.APIView):
         reveal_all_until = int(meta.get(b"reveal_all_until", b"0"))
 
         # Hide unrevealed tiles
-        tiles = [(board[i] if i in revealed else None) for i in range(size)]
+        # tiles = [(board[i] if i in revealed else None) for i in range(size)]
+
+        # Initial: no tiles revealed
+        if len(revealed) == 0:
+            tiles = []
+        else:
+            tiles = [
+                (i if i in revealed else None)
+                for i in range(size)
+            ]
+
 
         data = {
             "session_id": pk,
