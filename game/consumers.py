@@ -4,7 +4,7 @@ from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 from django_redis import get_redis_connection
 
-from game.services import handle_create_challenge, handle_flip, handle_respond_challenge
+from game.services import _session_keys, handle_create_challenge, handle_flip, handle_respond_challenge, _finalize_game
 from .models import GameSession
 from .constants import LABEL_SIZES
 from .utils import fire_and_forget  # optional
@@ -67,7 +67,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         session_id = content.get("session_id")
         indices = content.get("indices", [])
 
-        if session_id is None:
+        if not session_id:
             await self.send_json({"error": "session_id is required."})
             return
 
@@ -75,20 +75,20 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"error": "Provide exactly two indices."})
             return
 
-        # Ensure the user is a participant in this game
+        # Ensure user belongs to game
         can_join = await database_sync_to_async(self._user_can_join)(self.user.id, session_id)
         if not can_join:
             await self.send_json({"error": "You are not a participant in this game."})
             return
 
+        # Parse integers
         try:
             idx1, idx2 = int(indices[0]), int(indices[1])
-        except (TypeError, ValueError):
+        except:
             await self.send_json({"error": "Indices must be integers."})
             return
 
         try:
-            # Expected: payload (dict) with optional event info, and state (public state dict)
             payload, state = await database_sync_to_async(handle_flip)(
                 int(session_id),
                 self.user.id,
@@ -99,11 +99,27 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"error": str(e)})
             return
         except Exception:
-            # Don't leak internal errors to clients
-            await self.send_json({"error": "An unexpected error occurred while processing the move."})
+            await self.send_json({"error": "Internal server error during flip."})
             return
 
-        # Broadcast updated game state ONCE to everyone (including the actor).
+        # =====================
+        #  END-GAME HANDLING
+        # =====================
+        if isinstance(payload, dict) and payload.get("event") == "game_end":
+            # ONLY send game_end (NO game_state broadcast)
+            await self.channel_layer.group_send(
+                f"game_{session_id}",
+                {
+                    "type": "game_end",
+                    "results": payload["results"],  # winner + scores
+                    "state": state,                 # final revealed board
+                },
+            )
+            return  # IMPORTANT: stop here!
+
+        # ============================
+        # NORMAL MOVE (NOT END OF GAME)
+        # ============================
         await self.channel_layer.group_send(
             f"game_{session_id}",
             {
@@ -112,16 +128,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-        # If the service indicates that the game ended, broadcast a dedicated end-game event.
-        if isinstance(payload, dict) and payload.get("event") == "game_end":
-            await self.channel_layer.group_send(
-                f"game_{session_id}",
-                {
-                    "type": "game_end",
-                    "results": payload.get("results"),
-                    "state": state,
-                },
-            )
 
     async def _handle_create_challenge(self, content):
         """
@@ -273,14 +279,11 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"type": "game_state", "state": state})
 
     async def game_end(self, event):
-        # Broadcasted event handler for game end
-        await self.send_json(
-            {
+            await self.send_json({
                 "type": "game_end",
-                "results": event.get("results"),
-                "state": event.get("state"),
-            }
-        )
+                "results": event["results"],
+                "state": event["state"],
+            })
 
     async def disconnect(self, code):
         # Leave game room if joined
@@ -303,43 +306,45 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             return False
 
 
-# -------------------------
-# Redis helpers (sync)
-# -------------------------
+    # -------------------------
+    # Redis helpers (sync)
+    # -------------------------
 
-def _session_keys(sid):
-    base = f"game:{sid}:"
-    return {
-        "board": base + "board",
-        "revealed": base + "revealed",
-        "turn": base + "turn",
-        "scores": base + "scores",
-        "meta": base + "meta",
-    }
+    def _session_keys(sid):
+        base = f"game:{sid}:"
+        return {
+            "board": base + "board",
+            "revealed": base + "revealed",
+            "turn": base + "turn",
+            "scores": base + "scores",
+            "meta": base + "meta",
+        }
 
 
-def _read_public_state(session_id: int):
-    keys = _session_keys(session_id)
-    meta = r.hgetall(keys["meta"])
-    if not meta:
-        return None
+    def _read_public_state(session_id):
+        keys = _session_keys(session_id)
+        meta = r.hgetall(keys["meta"])
+        if not meta:
+            return None
 
-    size = int(meta[b"size"])
-    label = int(meta[b"label"])
-    turn_raw = r.get(keys["turn"])
-    turn_uid = int(turn_raw) if turn_raw else None
-    board = [int(x) for x in r.lrange(keys["board"], 0, -1)]
-    revealed = {int(i) for i in r.smembers(keys["revealed"])}
-    scores = {k.decode(): int(v) for k, v in r.hgetall(keys["scores"]).items()}
-    reveal_all_until = int(meta.get(b"reveal_all_until", b"0"))
+        size = int(meta[b"size"])
+        label = int(meta[b"label"])
+        board = [int(x) for x in r.lrange(keys["board"], 0, -1)]
 
-    tiles = [(board[i] if i in revealed else None) for i in range(size)]
-    return {
-        "session_id": session_id,
-        "label": label,
-        "size": size,
-        "tiles": tiles,
-        "turn_user_id": turn_uid,
-        "scores": scores,
-        "reveal_all_until": reveal_all_until,
-    }
+        revealed = {int(i) for i in r.smembers(keys["revealed"])}
+        tiles = [(board[i] if i in revealed else None) for i in range(size)]
+
+        turn = r.get(keys["turn"])
+        turn_uid = int(turn) if turn else None
+
+        scores = {k.decode(): int(v) for k, v in r.hgetall(keys["scores"]).items()}
+
+        return {
+            "session_id": session_id,
+            "label": label,
+            "size": size,
+            "tiles": tiles,
+            "turn_user_id": turn_uid,
+            "scores": scores,
+            "reveal_all_until": 0
+        }
