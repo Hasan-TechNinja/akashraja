@@ -101,6 +101,10 @@ def handle_flip(session_id, user_id, i, j):
         r.sadd(keys["revealed"], i, j)
         role = "p1" if user_id == int(r.hget(keys["meta"], "player1")) else "p2"
         r.hincrby(keys["scores"], role, 1)
+    else:
+        role = "p1" if user_id == int(r.hget(keys["meta"], "player1")) else "p2"
+        r.hincrby(keys["scores"], f"{role}_miss", 1)
+
 
     # Recompute revealed and finished
     revealed = {int(x) for x in r.smembers(keys["revealed"])}
