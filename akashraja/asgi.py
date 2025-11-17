@@ -1,22 +1,25 @@
+# asgi.py
 import os
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
 from django.core.asgi import get_asgi_application
-import game.routing as game_routing
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.sessions import SessionMiddlewareStack
 
-# JWT middleware that reads ?token=ACCESS_TOKEN and sets scope['user']
-from authentication.jwt_auth import JwtAuthMiddleware
+from game.middleware import JWTAuthMiddleware           # <-- your custom JWT middleware
+from game.routing import websocket_urlpatterns           # <-- your WS URLs
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'akashraja.settings')
 
-# Use JwtAuthMiddleware to allow token-auth via querystring, falling back to
-# Django session auth provided by AuthMiddlewareStack. This lets clients
-# connect with either ?token=ACCESS_TOKEN or a valid session cookie.
+# Standard Django ASGI app for HTTP
+django_asgi_app = get_asgi_application()
+
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
-    "websocket": JwtAuthMiddleware(
-        AuthMiddlewareStack(
-            URLRouter(game_routing.websocket_urlpatterns)
+    # HTTP requests
+    "http": django_asgi_app,
+
+    # WebSocket connections
+    "websocket": JWTAuthMiddleware(                      # <-- JWT auth applied here
+        URLRouter(
+            websocket_urlpatterns                       # <-- game/ws routing
         )
     ),
 })
