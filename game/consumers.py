@@ -59,9 +59,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         else:
             await self.send_json({"error": f"Unknown action '{action}'."})
 
-    # -------------------------
-    # Action handlers
-    # -------------------------
+    
 
     async def _handle_flip(self, content):
         session_id = content.get("session_id")
@@ -102,9 +100,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"error": "Internal server error during flip."})
             return
 
-        # =====================
-        #  END-GAME HANDLING
-        # =====================
+
         if isinstance(payload, dict) and payload.get("event") == "game_end":
             # ONLY send game_end (NO game_state broadcast)
             await self.channel_layer.group_send(
@@ -117,9 +113,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             )
             return  # IMPORTANT: stop here!
 
-        # ============================
-        # NORMAL MOVE (NOT END OF GAME)
-        # ============================
+
         await self.channel_layer.group_send(
             f"game_{session_id}",
             {
@@ -141,6 +135,8 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             opponent_id = int(content["opponent_id"])
             size = int(content["size"])
             label = int(content["label"])
+            category = int(content["category"])
+
         except (KeyError, TypeError, ValueError):
             await self.send_json(
                 {"error": "opponent_id, size, and label are required and must be valid integers."}
@@ -156,8 +152,8 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             challenge = await database_sync_to_async(handle_create_challenge)(
                 challenger_id=self.user.id,
                 opponent_id=opponent_id,
-                size=size,
                 label=label,
+                category=category,
             )
         except ValueError as e:
             await self.send_json({"error": str(e)})
@@ -265,9 +261,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
         await self.send_json({"type": "game_state", "state": state})
 
-    # -------------------------
-    # Channel layer handlers
-    # -------------------------
 
     async def game_move(self, event):
         # Broadcasted event handler (personal or room-scoped notifications)
@@ -294,9 +287,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         if getattr(self, "user", None):
             await self.channel_layer.group_discard(f"user_{self.user.id}", self.channel_name)
 
-    # -------------------------
-    # Sync DB helper
-    # -------------------------
 
     def _user_can_join(self, user_id, session_id):
         try:
@@ -306,9 +296,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             return False
 
 
-    # -------------------------
-    # Redis helpers (sync)
-    # -------------------------
 
     def _session_keys(sid):
         base = f"game:{sid}:"
@@ -330,6 +317,9 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         size = int(meta[b"size"])
         label = int(meta[b"label"])
         board = [int(x) for x in r.lrange(keys["board"], 0, -1)]
+        reveal_all_until = int(meta.get(b"reveal_all_until", b"0") or 0)
+        category = int(meta.get(b"category", b"0") or 0)
+
 
         revealed = {int(i) for i in r.smembers(keys["revealed"])}
         tiles = [(board[i] if i in revealed else None) for i in range(size)]
@@ -342,9 +332,10 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         return {
             "session_id": session_id,
             "label": label,
+            "category": category,      # ✅ ADDED
             "size": size,
             "tiles": tiles,
             "turn_user_id": turn_uid,
             "scores": scores,
-            "reveal_all_until": 0
+            "reveal_all_until": reveal_all_until,
         }

@@ -13,6 +13,8 @@ from django.db import models, transaction
 from django_redis import get_redis_connection
 from .models import GameChallenge, GameSession
 from .serializers import ChallengeCreateSerializer, ChallengeSerializer, SessionSerializer
+from game.services import fetch_images_for_category
+
 
 
 def _session_keys(sid):
@@ -57,12 +59,15 @@ class ChallengeRespondView(views.APIView):
                 player1=ch.challenger,
                 player2=ch.opponent,
                 label=ch.label,
+                category=ch.category,   # ✅ ADDED
             )
+
 
             # --- Initialize board in Redis ---
             keys = _session_keys(session.id)
             size = LABEL_SIZES[ch.label]
-            images = random.sample(IMAGE_IDS, size // 2)
+            # images = random.sample(IMAGE_IDS, size // 2)
+            images = fetch_images_for_category(ch.category_id, size)
             board = images + images
             random.shuffle(board)
 
@@ -80,6 +85,7 @@ class ChallengeRespondView(views.APIView):
                     "size": size,
                     "player1": ch.challenger_id,
                     "player2": ch.opponent_id,
+                    "category": ch.category_id,     # ✅ NEW
                     "reveal_all_until": reveal_ms,
                 },
             )
@@ -128,13 +134,16 @@ class ChallengeCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         challenger = self.request.user
-        opponent = serializer.validated_data["opponent"]
         label = serializer.validated_data["label"]
 
         if label not in LABEL_SIZES:
             raise ValueError("Invalid label")
 
-        serializer.save(challenger=challenger, status="pending")
+        serializer.save(
+            challenger=challenger,
+            status="pending"
+        )
+
 
 
 
@@ -217,6 +226,8 @@ class SessionStateView(views.APIView):
         scores = {k.decode(): int(v) for k, v in r.hgetall(keys["scores"]).items()}
         turn = int(r.get(keys["turn"]))
         reveal_all_until = int(meta.get(b"reveal_all_until", b"0"))
+        category = int(meta.get(b"category", 0))
+
 
         # Hide unrevealed tiles
         # tiles = [(board[i] if i in revealed else None) for i in range(size)]
@@ -234,6 +245,7 @@ class SessionStateView(views.APIView):
         data = {
             "session_id": pk,
             "label": label,
+            "category": category,
             "size": size,
             "tiles": tiles,
             "turn_user_id": turn,

@@ -6,18 +6,32 @@ from .constants import LABEL_SIZES, IMAGE_IDS
 import random
 import time
 from django.utils import timezone
+from home.models import Option
+
 
 r = get_redis_connection("default")
 
-def handle_create_challenge(challenger_id, opponent_id, label):
-    """Create a new challenge."""
+def fetch_images_for_category(category_id, size):
+    options = Option.objects.filter(category_id=category_id)
+
+    needed = size // 2
+    if options.count() < needed:
+        raise ValueError("Not enough images in this category")
+
+    ids = list(options.values_list("id", flat=True))
+    return random.sample(ids, needed)
+
+
+def handle_create_challenge(challenger_id, opponent_id, label, category):
     challenge = GameChallenge.objects.create(
         challenger_id=challenger_id,
         opponent_id=opponent_id,
         label=label,
+        category_id=category,      # ✅ NEW
         status="pending",
     )
     return challenge
+
 
 def handle_respond_challenge(challenge_id, accept, user_id):
     """Respond to a challenge and optionally create a session."""
@@ -38,11 +52,12 @@ def handle_respond_challenge(challenge_id, accept, user_id):
             player1=challenge.challenger,
             player2=challenge.opponent,
             label=challenge.label,
+            category=challenge.category,    # ✅ ADDED
         )
 
         keys = _session_keys(session.id)
         size = LABEL_SIZES[challenge.label]
-        images = random.sample(IMAGE_IDS, size // 2)
+        images = fetch_images_for_category(challenge.category_id, size)
         board = images + images
         random.shuffle(board)
 
@@ -59,6 +74,7 @@ def handle_respond_challenge(challenge_id, accept, user_id):
                 "size": size,
                 "player1": challenge.challenger_id,
                 "player2": challenge.opponent_id,
+                "category": challenge.category_id,     # ✅ NEW
                 "reveal_all_until": reveal_ms,
             },
         )
