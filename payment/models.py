@@ -59,12 +59,12 @@ class SubscriptionPlan(models.Model):
 
     def clean(self):
         # For paid recurring plans (monthly/yearly), require stripe_price_id
-        if self.plan_type in ('monthly', 'yearly') and not self.stripe_price_id:
-            raise ValidationError("stripe_price_id is required for recurring paid plans.")
-        # duration_days is only meaningful for non-Stripe fixed-duration plans
-        if self.plan_type in ('monthly', 'yearly') and self.duration_days:
-            # Not an error, but warn in admin normally; here we enforce to avoid confusion
-            raise ValidationError("Do not set duration_days for monthly/yearly Stripe plans.")
+        # if self.plan_type in ('monthly', 'yearly') and not self.stripe_price_id:
+        #     raise ValidationError("stripe_price_id is required for recurring paid plans.")
+        # # duration_days is only meaningful for non-Stripe fixed-duration plans
+        # if self.plan_type in ('monthly', 'yearly') and self.duration_days:
+        #     # Not an error, but warn in admin normally; here we enforce to avoid confusion
+        #     raise ValidationError("Do not set duration_days for monthly/yearly Stripe plans.")
         if self.is_free() and (self.stripe_price_id or self.price):
             # Keep free clean
             if self.price != 0:

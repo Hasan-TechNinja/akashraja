@@ -263,10 +263,18 @@ class StripeWebhookView(APIView):
                 user_sub.stripe_subscription_id = stripe_sub.id
                 user_sub.status = stripe_sub.status
 
-                current_period_end = stripe_sub.get('current_period_end')
-                if current_period_end:
+                # current_period_end = stripe_sub.get('current_period_end')
+                # if current_period_end:
+                #     user_sub.current_period_end = timezone.make_aware(
+                #         datetime.fromtimestamp(current_period_end)
+                #     )
+                # else:
+                #     user_sub.current_period_end = None
+
+                period_end = stripe_sub.get("current_period_end")
+                if period_end:
                     user_sub.current_period_end = timezone.make_aware(
-                        datetime.fromtimestamp(current_period_end)
+                        datetime.fromtimestamp(period_end)
                     )
                 else:
                     user_sub.current_period_end = None
