@@ -322,7 +322,9 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
 
         revealed = {int(i) for i in r.smembers(keys["revealed"])}
-        tiles = [(board[i] if i in revealed else None) for i in range(size)]
+        # tiles = [(board[i] if i in revealed else None) for i in range(size)]
+        tiles = board   # show all image IDs
+
 
         turn = r.get(keys["turn"])
         turn_uid = int(turn) if turn else None

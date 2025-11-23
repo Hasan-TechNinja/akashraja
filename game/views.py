@@ -164,9 +164,6 @@ class PendingChallengesView(generics.ListAPIView):
 
 
 class MyActiveSessionView(views.APIView):
-    """
-    Returns the current active game session for the logged-in user, if any.
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -180,10 +177,56 @@ class MyActiveSessionView(views.APIView):
         if not session:
             return Response({"active": False})
 
-        return Response({
-            "active": True,
-            "session": SessionSerializer(session).data
+        # ------------------------------
+        # 🔥 Fetch session state from Redis
+        # ------------------------------
+
+        pk = session.id
+        keys = {
+            "board": f"game:{pk}:board",
+            "revealed": f"game:{pk}:revealed",
+            "turn": f"game:{pk}:turn",
+            "scores": f"game:{pk}:scores",
+            "meta": f"game:{pk}:meta",
+        }
+
+        meta = r.hgetall(keys["meta"])
+        if not meta:
+            return Response({"active": True, "session": SessionSerializer(session).data})
+
+        size = int(meta[b"size"])
+        label = int(meta[b"label"])
+        category = int(meta.get(b"category", b"0"))
+        reveal_all_until = int(meta.get(b"reveal_all_until", b"0") or 0)
+
+        board = [int(x) for x in r.lrange(keys["board"], 0, -1)]
+        revealed = {int(i) for i in r.smembers(keys["revealed"])}
+        scores = {k.decode(): int(v) for k, v in r.hgetall(keys["scores"]).items()}
+        turn = int(r.get(keys["turn"]))
+
+        # Same tile format as WebSocket:
+        # if len(revealed) == 0:
+        #     tiles = []
+        # else:
+        #     tiles = [(i if i in revealed else None) for i in range(size)]
+        tiles = board   # show all image IDs
+
+
+        # ------------------------------
+        # 🎯 Return merged DB + Redis data
+        # ------------------------------
+        session_data = SessionSerializer(session).data
+        session_data.update({
+            "category": category,
+            "size": size,
+            "tiles": tiles,
+            "turn_user_id": turn,
+            "scores": scores,
+            "reveal_all_until": reveal_all_until,
         })
+
+        return Response({"active": True, "session": session_data})
+
 
 
 
@@ -233,13 +276,15 @@ class SessionStateView(views.APIView):
         # tiles = [(board[i] if i in revealed else None) for i in range(size)]
 
         # Initial: no tiles revealed
-        if len(revealed) == 0:
-            tiles = []
-        else:
-            tiles = [
-                (i if i in revealed else None)
-                for i in range(size)
-            ]
+        # if len(revealed) == 0:
+        #     tiles = []
+        # else:
+        #     tiles = [
+        #         (i if i in revealed else None)
+        #         for i in range(size)
+        #     ]
+        tiles = board   # show all image IDs
+
 
 
         data = {
