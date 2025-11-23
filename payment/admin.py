@@ -1,29 +1,14 @@
 from django.contrib import admin
 from .models import SubscriptionPlan, UserSubscription
-from django import forms
 # Register your models here.
 
-class SubscriptionPlanAdminForm(forms.ModelForm):
-    class Meta:
-        model = SubscriptionPlan
-        fields = "__all__"
-
-    def clean(self):
-        cleaned = super().clean()
-        plan_type = cleaned.get("plan_type")
-        if plan_type in ("monthly", "yearly"):
-            cleaned["duration_days"] = None
-        if plan_type == "free":
-            cleaned["price"] = 0
-            cleaned["stripe_price_id"] = None
-        return cleaned
-
-@admin.register(SubscriptionPlan)
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    form = SubscriptionPlanAdminForm
-    list_display = ("id", "name", "plan_type", "price", "stripe_price_id", "duration_days")
-    list_filter = ("plan_type",)
-    search_fields = ("name",)
+    list_display = ('name', 'price', 'duration_days', 'plan_type')
+    search_fields = ('name',)
+    list_filter = ('plan_type',)
+    ordering = ('-price',)
+
+admin.site.register(SubscriptionPlan, SubscriptionPlanAdmin)
 
 
 class UserSubscriptionAdmin(admin.ModelAdmin):

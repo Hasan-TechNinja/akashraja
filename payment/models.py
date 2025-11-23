@@ -1,4 +1,3 @@
-
 # models.py
 from __future__ import annotations
 
@@ -15,8 +14,8 @@ from django.utils import timezone
 class SubscriptionPlan(models.Model):
     PLAN_TYPES = [
         ('monthly', 'Monthly'),
-        # ('yearly', 'Yearly'),
-        # ('free', 'Free'),
+        ('yearly', 'Yearly'),
+        ('free', 'Free'),
     ]
 
     name = models.CharField(max_length=100, unique=True, db_index=True)

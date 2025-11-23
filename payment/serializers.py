@@ -1,5 +1,21 @@
 from rest_framework import serializers
-from . models import SubscriptionPlan, UserSubscription
+import random
+import uuid
+import string
+
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.mail import send_mail
+from django.utils import timezone
+from django.contrib.auth import authenticate
+
+from .models import SubscriptionPlan, UserSubscription
+
+from rest_framework.validators import UniqueValidator
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenObtainSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
+
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
@@ -26,11 +42,10 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserSubscription
         fields = [
-            'id', 'user', 'plan', 'plan_id', 'start_date', 'end_date', 'is_active', 'status'
+            'id', 'user', 'plan', 'plan_id', 'start_date', 'end_date', 'is_active',
+            'last_renewed', 'stripe_customer_id', 'stripe_subscription_id',
+            'cancel_at_period_end', 'current_period_end', 'status'
         ]
-
-            # 'last_renewed', 'stripe_customer_id', 'stripe_subscription_id', 'cancel_at_period_end', 'current_period_end',
-        
         read_only_fields = [
             'user', 'start_date', 'end_date', 'last_renewed',
             'stripe_customer_id', 'stripe_subscription_id',
@@ -40,4 +55,3 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         # Allow swapping plan via plan_id when needed (admin / service)
         return super().update(instance, validated_data)
-    

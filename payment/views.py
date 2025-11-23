@@ -1,20 +1,42 @@
-from django.shortcuts import render
-from . serializers import SubscriptionPlanSerializer, UserSubscriptionSerializer
-from . models import SubscriptionPlan, UserSubscription
+import random
 import stripe
-from rest_framework import status, permissions
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from django.conf import settings
-from rest_framework import viewsets
-from rest_framework.decorators import action
+from tokenize import TokenError
+from django.shortcuts import render
+from django.contrib.auth.models import User
 from django.utils import timezone 
+from datetime import timedelta, date
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import authenticate, login
+import datetime
+from rest_framework.exceptions import NotFound
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import make_password
 
-# Create your views here.
+
+from .serializers import SubscriptionPlanSerializer, UserSubscriptionSerializer
+from .models import SubscriptionPlan, UserSubscription
+
+from rest_framework import status, permissions, generics
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
+from rest_framework.response import Response
+from datetime import datetime
+from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
+
+
+
+
 
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -59,7 +81,7 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def current_active(self, request):
         sub = self.get_queryset().first()
-        if sub and sub.is_active == True:
+        if sub and sub.is_currently_active:
             return Response(self.get_serializer(sub).data, status=status.HTTP_200_OK)
         return Response({"message": "No active subscription found for this user."}, status=status.HTTP_200_OK)
 
@@ -109,7 +131,8 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
                 customer=customer.id,
                 customer_update={'address': 'auto', 'name': 'auto'},
                 line_items=[{'price': plan.stripe_price_id, 'quantity': 1}],
-                success_url=request.build_absolute_uri(f'/payments/success/'),
+                # success_url=request.build_absolute_uri(f'/payments/success/'),
+                success_url=request.build_absolute_uri('/payments/success/{sub.id}/?session_id={{CHECKOUT_SESSION_ID}}'),
                 cancel_url=request.build_absolute_uri('/payments/cancel/'),
                 metadata={'user_id': user.id, 'subscription_id': sub.id, 'plan_id': plan.id},
                 allow_promotion_codes=True,
@@ -207,39 +230,50 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class StripeWebhookView(APIView):
-    def post(self, request, *args, **kwargs):
-        payload = request.body.decode('utf-8')
-        sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    permission_classes = [AllowAny]
 
-        # try:
-        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
-        print(settings.STRIPE_WEBHOOK_SECRET)
-        # except ValueError:
-            # return JsonResponse({'message': 'Invalid payload'}, status=400)
-        # except stripe.error.SignatureVerificationError:
-            # return JsonResponse({'message': 'Invalid signature'}, status=400)
+    def post(self, request, *args, **kwargs):
+
+        # Use raw body; Stripe is picky about this
+        payload = request.body  # bytes
+        sig_header = request.headers.get('Stripe-Signature')
+
+        try:
+            event = stripe.Webhook.construct_event(
+                payload=payload,
+                sig_header=sig_header,
+                secret=settings.STRIPE_WEBHOOK_SECRET,
+            )
+        except Exception as e:
+            # Any problem here = bad payload/signature
+            print("Stripe webhook verification failed:", repr(e))
+            return JsonResponse({'message': 'Invalid payload or signature'}, status=400)
 
         # 1) Checkout session completed (user completed checkout)
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             metadata = session.get('metadata', {}) or {}
-            sub_id = metadata.get('subscription_id', False)   
-            
+            sub_id = metadata.get('subscription_id')
+
             if sub_id:
                 user_sub = get_object_or_404(UserSubscription, id=sub_id)
                 stripe_sub = stripe.Subscription.retrieve(session['subscription'])
-                
-                # Update the local subscription with the Stripe subscription ID and status
+
+                # Update local subscription from Stripe
                 user_sub.stripe_subscription_id = stripe_sub.id
                 user_sub.status = stripe_sub.status
-                current_period_end = stripe_sub.get('current_period_end', None)
+
+                current_period_end = stripe_sub.get('current_period_end')
                 if current_period_end:
-                    user_sub.period_end_time = timezone.datetime.fromtimestamp(current_period_end)
+                    user_sub.current_period_end = timezone.make_aware(
+                        datetime.fromtimestamp(current_period_end)
+                    )
                 else:
-                    user_sub.period_end_time = None 
+                    user_sub.current_period_end = None
+
+                # Mark active based on Stripe status
                 user_sub.is_active = user_sub.status in ('trialing', 'active', 'past_due')
-                user_sub.is_active= True
-                print(user_sub.is_active)
+                # print("is_active from webhook:", user_sub.is_active)
                 user_sub.save()
 
             return JsonResponse({'status': 'ok'}, status=200)
@@ -248,8 +282,9 @@ class StripeWebhookView(APIView):
 
 
 
+
 class SuccessView(APIView):
-    permission_classes = [permissions.AllowAny]  # <-- user may not be logged in after checkout
+    permission_classes = [AllowAny]  # <-- user may not be logged in after checkout
 
     def get(self, request, subscription_id):
         session_id = request.GET.get('session_id')  # Fetch session_id from query parameters
@@ -300,4 +335,5 @@ class CancelPaymentView(APIView):
         sub.save()
         return Response({"message": "Subscription canceled locally."}, status=200)
 
-          
+        
+    
