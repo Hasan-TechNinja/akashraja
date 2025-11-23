@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 
 from .models import UserProfile, Friendship, FriendRequest, LastPlayed
-from .serializers import UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer, UserSerializer, DeviceIDSerializer
+from .serializers import UserInfoByPlayerIDSerializer, UserMiniSerializer, FriendSerializer, FriendRequestSerializer, LastPlayedSerializer, UserProfileSerializer, UserSerializer, DeviceIDSerializer
 from .permissions import IsAuthenticated
 from .utils import are_friends
 from django.db.models import Q
@@ -252,3 +252,20 @@ class UpdateDeviceIDView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class UserInfoByPlayerID(APIView):
+    def post(self, request):
+        player_id = request.data.get('player_id')
+
+        if not player_id:
+            return Response({"error": "player_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_data = UserProfile.objects.filter(player_id=player_id).first()
+
+        if not user_data:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserInfoByPlayerIDSerializer(user_data)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)

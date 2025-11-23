@@ -20,5 +20,6 @@ urlpatterns = [
     path("friends/my/", views.MyFriendsListView.as_view()),
     path("last-played/users/", views.PlayedUsersListView.as_view(), name="played-users-list"),
     path("profile/device-id/", views.UpdateDeviceIDView.as_view(), name="update-device-id"),
+    path("user-data/by-playser-id/", views.UserInfoByPlayerID.as_view(), name='player-info'),
 
 ]

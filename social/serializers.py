@@ -64,3 +64,9 @@ class DeviceIDSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = ['device_id']
+
+
+class UserInfoByPlayerIDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = "__all__"
