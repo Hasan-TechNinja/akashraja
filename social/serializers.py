@@ -47,11 +47,12 @@ class LastPlayedSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
     class Meta:
         model = UserProfile
-        fields = ['user_id', 'player_id', 'name', 'image', 'avatar', 'online']
+        fields = ['user_id', 'player_id', 'name', 'email', 'image', 'avatar', 'online']
 
-
+ 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
 
