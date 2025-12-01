@@ -55,7 +55,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         elif action == "respond_challenge":
             await self._handle_respond_challenge(content)
         elif action == "get_state":
-            await self._handle_get_state(content)
+            await self._handle_get_state(content)  
         else:
             await self.send_json({"error": f"Unknown action '{action}'."})
 
