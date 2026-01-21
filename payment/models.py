@@ -42,10 +42,10 @@ class SubscriptionPlan(models.Model):
 
     class Meta:
         constraints = [
-            models.CheckConstraint(check=models.Q(price__gte=0), name='plan_price_nonnegative'),
+            models.CheckConstraint(condition=models.Q(price__gte=0), name='plan_price_nonnegative'),
             # If plan is free, price must be 0
             models.CheckConstraint(
-                check=models.Q(plan_type='free', price=0) | ~models.Q(plan_type='free'),
+                condition=models.Q(plan_type='free', price=0) | ~models.Q(plan_type='free'),
                 name='free_plan_price_zero'
             ),
         ]

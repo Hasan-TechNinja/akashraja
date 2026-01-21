@@ -153,6 +153,10 @@ def record_last_played(request):
     if other_id == request.user.id:
         return Response({"detail": "invalid"}, status=400)
 
+    # Check if the other user exists to avoid IntegrityError (foreign key constraint)
+    if not User.objects.filter(id=other_id).exists():
+        return Response({"detail": "User not found"}, status=404)
+
     user_id = request.user.id
 
     # Use update_or_create to keep only one entry per pair
