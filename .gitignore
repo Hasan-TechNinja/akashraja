@@ -23,3 +23,18 @@ media/
 .idea/
 # If you are using JetBrains IDEs
 /secrets/
+.env
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.log
+*.pot
+*.swp
+*.swo
+*.bak
+*.tmp
+.DS_Store   
