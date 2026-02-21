@@ -1,0 +1,12 @@
+[Unit]
+Description=gunicorn daemon
+After=network.target
+
+[Service]
+User=hasan
+Group=www-data
+WorkingDirectory=/home/hasan/akashraja
+ExecStart=/home/hasan/akashraja/env/bin/gunicorn --access-logfile - --workers 3 --bind unix:/home/hasan/akashraja/akashraja.sock akashraja.wsgi:application
+
+[Install]
+WantedBy=multi-user.target

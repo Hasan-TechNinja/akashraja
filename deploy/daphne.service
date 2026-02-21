@@ -1,0 +1,12 @@
+[Unit]
+Description=daphne daemon
+After=network.target
+
+[Service]
+User=hasan
+Group=www-data
+WorkingDirectory=/home/hasan/akashraja
+ExecStart=/home/hasan/akashraja/env/bin/daphne -u /home/hasan/akashraja/daphne.sock -b 0.0.0.0 -p 8001 akashraja.asgi:application
+
+[Install]
+WantedBy=multi-user.target

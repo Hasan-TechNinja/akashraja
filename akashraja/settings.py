@@ -23,12 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-o2tu7#(id5fb@q&bd!((t=7+55-_53w=v$q(k*r=pb$tli-5xo'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-o2tu7#(id5fb@q&bd!((t=7+55-_53w=v$q(k*r=pb$tli-5xo')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() for s in v.split(',')])
 
 
 # Application definition
@@ -53,6 +53,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -95,12 +96,12 @@ ASGI_APPLICATION = "akashraja.asgi.application"
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'akashraja',
-        'USER': 'akash',
-        'PASSWORD': 'password',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql_psycopg2'),
+        'NAME': config('DB_NAME', default='akashraja'),
+        'USER': config('DB_USER', default='akash'),
+        'PASSWORD': config('DB_PASS', default='password'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
@@ -146,6 +147,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -233,6 +235,8 @@ CACHES = {
 CHANNEL_LAYERS = {
   "default": {
     "BACKEND": "channels_redis.core.RedisChannelLayer",
-    "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+    "CONFIG": {"hosts": [(config('REDIS_HOST', default='127.0.0.1'), config('REDIS_PORT', default=6379, cast=int))]},
   },
 }
+
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost,http://127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
