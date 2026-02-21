@@ -1,3 +1,4 @@
+anyio==4.12.1
 asgiref==3.9.2
 attrs==25.4.0
 autobahn==25.10.2
@@ -19,6 +20,7 @@ django-stripe-payments==2.0.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 h11==0.16.0
+httptools==0.7.1
 hyperlink==21.0.0
 idna==3.11
 incremental==24.7.2
@@ -31,9 +33,11 @@ pycparser==2.23
 PyJWT==2.10.1
 pyOpenSSL==25.3.0
 python-decouple==3.8
+python-dotenv==1.2.1
 python-engineio==4.12.3
 python-socketio==5.14.3
 pytz==2025.2
+PyYAML==6.0.3
 redis==7.0.1
 requests==2.32.5
 service-identity==24.2.0
@@ -47,6 +51,10 @@ txaio==25.9.2
 typing_extensions==4.15.0
 urllib3==2.5.0
 uvicorn==0.38.0
+uvloop==0.22.1
+watchfiles==1.1.1
+websockets==16.0
 wheel==0.45.1
+whitenoise==6.11.0
 wsproto==1.2.0
 zope.interface==8.0.1
