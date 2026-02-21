@@ -4,9 +4,15 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from channels.db import database_sync_to_async
 from urllib.parse import parse_qs
+from django.utils.deprecation import MiddlewareMixin
 
 User = get_user_model()
 
+class MyMiddleware(MiddlewareMixin):
+    def process_request(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()  # <-- move it here
+        # now you can safely use User
 
 class JWTAuthMiddleware:
     def __init__(self, app):
