@@ -333,20 +333,21 @@ def handle_flip(session_id, user_id, i, j):
     # FINISH GAME
     # ---------------------------------------------------
     if finished:
-        session = GameSession.objects.select_for_update().get(pk=session_id)
-        session.p1_score = scores.get("p1", 0)
-        session.p2_score = scores.get("p2", 0)
+        with transaction.atomic():
+            session = GameSession.objects.select_for_update().get(pk=session_id)
+            session.p1_score = scores.get("p1", 0)
+            session.p2_score = scores.get("p2", 0)
 
-        if session.p1_score > session.p2_score:
-            session.winner_id = session.player1_id
-        elif session.p2_score > session.p1_score:
-            session.winner_id = session.player2_id
-        else:
-            session.winner_id = None
+            if session.p1_score > session.p2_score:
+                session.winner_id = session.player1_id
+            elif session.p2_score > session.p1_score:
+                session.winner_id = session.player2_id
+            else:
+                session.winner_id = None
 
-        session.status = "finished"
-        session.ended_at = timezone.now()
-        session.save()
+            session.status = "finished"
+            session.ended_at = timezone.now()
+            session.save()
 
         state = {
             "session_id": session_id,
