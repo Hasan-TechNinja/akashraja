@@ -54,3 +54,9 @@ migrations
 
 env/
 .env
+
+env/
+venv/
+*.pyc
+__pycache__/
+.env
