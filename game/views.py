@@ -33,19 +33,20 @@ class ChallengeRespondView(views.APIView):
 
     def post(self, request, pk):
         accept = bool(request.data.get("accept"))
-        try:
-            ch = GameChallenge.objects.select_for_update().get(pk=pk)
-        except GameChallenge.DoesNotExist:
-            return Response({"detail": "Challenge not found"}, status=404)
-
-        # ✅ Permission check
-        if ch.opponent_id != request.user.id:
-            return Response({"detail": "Not your challenge."}, status=403)
-
-        if ch.status != "pending":
-            return Response({"detail": "Already handled."}, status=400)
 
         with transaction.atomic():
+            try:
+                ch = GameChallenge.objects.select_for_update().get(pk=pk)
+            except GameChallenge.DoesNotExist:
+                return Response({"detail": "Challenge not found"}, status=404)
+
+            # ✅ Permission check
+            if ch.opponent_id != request.user.id:
+                return Response({"detail": "Not your challenge."}, status=403)
+
+            if ch.status != "pending":
+                return Response({"detail": "Already handled."}, status=400)
+
             # --- Update challenge status ---
             ch.status = "accepted" if accept else "declined"
             ch.save()
@@ -321,10 +322,11 @@ class FlipView(views.APIView):
         if i == j:
             return Response({"detail": "Pick two different tiles."}, status=400)
 
-        try:
-            sess = GameSession.objects.select_for_update().get(pk=pk)
-        except GameSession.DoesNotExist:
-            return Response({"detail": "Session not found."}, status=404)
+        with transaction.atomic():
+            try:
+                sess = GameSession.objects.select_for_update().get(pk=pk)
+            except GameSession.DoesNotExist:
+                return Response({"detail": "Session not found."}, status=404)
 
         uid = request.user.id
         if uid not in (sess.player1_id, sess.player2_id):
