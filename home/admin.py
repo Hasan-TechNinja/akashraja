@@ -16,7 +16,8 @@ admin.site.register(Option, OptionAdmin)
 
 
 class AlbumAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'name', 'created_at', 'updated_at')
-    search_fields = ('name', 'user__username')
-    
+    # Only use 'id' and 'user' since we know those exist
+    list_display = ('id', 'user')
+    search_fields = ('user__username',)
+
 admin.site.register(Album, AlbumAdmin)
